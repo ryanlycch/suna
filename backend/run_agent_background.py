@@ -1,3 +1,4 @@
+import sentry
 import asyncio
 import json
 import traceback
@@ -51,13 +52,18 @@ async def run_agent_background(
     enable_thinking: Optional[bool],
     reasoning_effort: Optional[str],
     stream: bool,
-    enable_context_manager: bool
+    enable_context_manager: bool,
+    agent_config: Optional[dict] = None  # Add agent configuration parameter
 ):
     """Run the agent in the background using Redis for state."""
     await initialize()
 
+    sentry.sentry.set_tag("thread_id", thread_id)
+
     logger.info(f"Starting background agent run: {agent_run_id} for thread: {thread_id} (Instance: {instance_id})")
     logger.info(f"🚀 Using model: {model_name} (thinking: {enable_thinking}, reasoning_effort: {reasoning_effort})")
+    if agent_config:
+        logger.info(f"Using custom agent: {agent_config.get('name', 'Unknown')}")
 
     client = await db.client
     start_time = datetime.now(timezone.utc)
@@ -115,6 +121,7 @@ async def run_agent_background(
             model_name=model_name,
             enable_thinking=enable_thinking, reasoning_effort=reasoning_effort,
             enable_context_manager=enable_context_manager,
+            agent_config=agent_config,
             trace=trace
         )
 

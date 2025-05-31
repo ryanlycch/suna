@@ -5,6 +5,7 @@ import { Square, Loader2, ArrowUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UploadedFile } from './chat-input';
 import { FileUploadHandler } from './file-upload-handler';
+import { VoiceRecorder } from './voice-recorder';
 import { ModelSelector } from './model-selector';
 import { SubscriptionStatus } from './_use-model-selection';
 import { isLocalMode } from '@/lib/config';
@@ -16,6 +17,7 @@ interface MessageInputProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onTranscription: (text: string) => void;
   placeholder: string;
   loading: boolean;
   disabled: boolean;
@@ -31,6 +33,7 @@ interface MessageInputProps {
   setUploadedFiles: React.Dispatch<React.SetStateAction<UploadedFile[]>>;
   setIsUploading: React.Dispatch<React.SetStateAction<boolean>>;
   hideAttachments?: boolean;
+  messages?: any[]; // Add messages prop
 
   selectedModel: string;
   onModelChange: (model: string) => void;
@@ -46,6 +49,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       value,
       onChange,
       onSubmit,
+      onTranscription,
       placeholder,
       loading,
       disabled,
@@ -61,6 +65,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       setUploadedFiles,
       setIsUploading,
       hideAttachments = false,
+      messages = [],
 
       selectedModel,
       onModelChange,
@@ -94,7 +99,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
     }, [value, ref]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         if (
           (value.trim() || uploadedFiles.length > 0) &&
@@ -137,10 +142,13 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                 setPendingFiles={setPendingFiles}
                 setUploadedFiles={setUploadedFiles}
                 setIsUploading={setIsUploading}
+                messages={messages}
               />
             )}
-
-
+            <VoiceRecorder
+              onTranscription={onTranscription}
+              disabled={loading || (disabled && !isAgentRunning)}
+            />
           </div>
           {subscriptionStatus === 'no_subscription' && !isLocalMode() &&
             <TooltipProvider>
@@ -148,7 +156,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                 <TooltipTrigger>
                   <p className='text-sm text-amber-500 hidden sm:block'>Upgrade for full performance</p>
                   <div className='sm:hidden absolute bottom-0 left-0 right-0 flex justify-center'>
-                    <p className='text-xs text-amber-500 bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm'>
+                    <p className='text-xs text-amber-500 px-2 py-1'>
                       Upgrade for better performance
                     </p>
                   </div>
