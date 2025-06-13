@@ -112,7 +112,9 @@ def create_sandbox(password: str, project_id: str = None):
             "cpu": 2,
             "memory": 4,
             "disk": 5,
-        }
+        },
+        auto_stop_interval=15,
+        auto_archive_interval=24 * 60,
     )
     
     # Create the sandbox
@@ -124,4 +126,21 @@ def create_sandbox(password: str, project_id: str = None):
     
     logger.debug(f"Sandbox environment successfully initialized")
     return sandbox
+
+async def delete_sandbox(sandbox_id: str):
+    """Delete a sandbox by its ID."""
+    logger.info(f"Deleting sandbox with ID: {sandbox_id}")
+    
+    try:
+        # Get the sandbox
+        sandbox = daytona.get_current_sandbox(sandbox_id)
+        
+        # Delete the sandbox
+        daytona.remove(sandbox)
+        
+        logger.info(f"Successfully deleted sandbox {sandbox_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Error deleting sandbox {sandbox_id}: {str(e)}")
+        raise e
 

@@ -6,7 +6,7 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, APIRouter, Form, D
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from sandbox.sandbox import get_or_start_sandbox
+from sandbox.sandbox import get_or_start_sandbox, delete_sandbox
 from utils.logger import logger
 from utils.auth_utils import get_optional_user_id
 from services.supabase import DBConnection
@@ -166,7 +166,7 @@ async def create_file(
         content = await file.read()
         
         # Create file using raw binary content
-        sandbox.fs.upload_file(path, content)
+        sandbox.fs.upload_file(content, path)
         logger.info(f"File created at {path} in sandbox {sandbox_id}")
         
         return {"status": "success", "created": True, "path": path}
@@ -273,6 +273,58 @@ async def read_file(
         raise
     except Exception as e:
         logger.error(f"Error reading file in sandbox {sandbox_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/sandboxes/{sandbox_id}/files")
+async def delete_file(
+    sandbox_id: str, 
+    path: str,
+    request: Request = None,
+    user_id: Optional[str] = Depends(get_optional_user_id)
+):
+    """Delete a file from the sandbox"""
+    # Normalize the path to handle UTF-8 encoding correctly
+    path = normalize_path(path)
+    
+    logger.info(f"Received file delete request for sandbox {sandbox_id}, path: {path}, user_id: {user_id}")
+    client = await db.client
+    
+    # Verify the user has access to this sandbox
+    await verify_sandbox_access(client, sandbox_id, user_id)
+    
+    try:
+        # Get sandbox using the safer method
+        sandbox = await get_sandbox_by_id_safely(client, sandbox_id)
+        
+        # Delete file
+        sandbox.fs.delete_file(path)
+        logger.info(f"File deleted at {path} in sandbox {sandbox_id}")
+        
+        return {"status": "success", "deleted": True, "path": path}
+    except Exception as e:
+        logger.error(f"Error deleting file in sandbox {sandbox_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/sandboxes/{sandbox_id}")
+async def delete_sandbox_route(
+    sandbox_id: str,
+    request: Request = None,
+    user_id: Optional[str] = Depends(get_optional_user_id)
+):
+    """Delete an entire sandbox"""
+    logger.info(f"Received sandbox delete request for sandbox {sandbox_id}, user_id: {user_id}")
+    client = await db.client
+    
+    # Verify the user has access to this sandbox
+    await verify_sandbox_access(client, sandbox_id, user_id)
+    
+    try:
+        # Delete the sandbox using the sandbox module function
+        await delete_sandbox(sandbox_id)
+        
+        return {"status": "success", "deleted": True, "sandbox_id": sandbox_id}
+    except Exception as e:
+        logger.error(f"Error deleting sandbox {sandbox_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # Should happen on server-side fully
