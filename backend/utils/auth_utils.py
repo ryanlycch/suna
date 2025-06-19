@@ -1,7 +1,9 @@
+import sentry
 from fastapi import HTTPException, Request
 from typing import Optional
 import jwt
 from jwt.exceptions import PyJWTError
+from utils.logger import structlog
 
 # This function extracts the user ID from Supabase JWT
 async def get_current_user_id_from_jwt(request: Request) -> str:
@@ -45,7 +47,11 @@ async def get_current_user_id_from_jwt(request: Request) -> str:
                 detail="Invalid token payload",
                 headers={"WWW-Authenticate": "Bearer"}
             )
-        
+
+        sentry.sentry.set_user({ "id": user_id })
+        structlog.contextvars.bind_contextvars(
+            user_id=user_id
+        )
         return user_id
         
     except PyJWTError:
@@ -120,6 +126,10 @@ async def get_user_id_from_stream_auth(
             payload = jwt.decode(token, options={"verify_signature": False})
             user_id = payload.get('sub')
             if user_id:
+                sentry.sentry.set_user({ "id": user_id })
+                structlog.contextvars.bind_contextvars(
+                    user_id=user_id
+                )
                 return user_id
         except Exception:
             pass
@@ -210,6 +220,11 @@ async def get_optional_user_id(request: Request) -> Optional[str]:
         
         # Supabase stores the user ID in the 'sub' claim
         user_id = payload.get('sub')
+        if user_id:
+            sentry.sentry.set_user({ "id": user_id })
+            structlog.contextvars.bind_contextvars(
+                user_id=user_id
+            )
         
         return user_id
     except PyJWTError:
