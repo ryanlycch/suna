@@ -30,6 +30,7 @@ export const Highlight = ({
 export const BLUR_FADE_DELAY = 0.15;
 
 interface UpgradePlan {
+  /** @deprecated */
   hours: string;
   price: string;
   stripePriceId: string;
@@ -38,14 +39,21 @@ interface UpgradePlan {
 export interface PricingTier {
   name: string;
   price: string;
+  yearlyPrice?: string; // Add yearly price support
   description: string;
   buttonText: string;
   buttonColor: string;
   isPopular: boolean;
+  /** @deprecated */
   hours: string;
   features: string[];
   stripePriceId: string;
+  yearlyStripePriceId?: string; // Add yearly price ID support
   upgradePlans: UpgradePlan[];
+  hidden?: boolean; // Optional property to hide plans from display while keeping them in code
+  billingPeriod?: 'monthly' | 'yearly'; // Add billing period support
+  originalYearlyPrice?: string; // For showing crossed-out price
+  discountPercentage?: number; // For showing discount badge
 }
 
 export const siteConfig = {
@@ -108,72 +116,174 @@ export const siteConfig = {
       name: 'Free',
       price: '$0',
       description: 'Get started with',
-      buttonText: 'Try Free',
+      buttonText: 'Start Free',
       buttonColor: 'bg-secondary text-white',
       isPopular: false,
+      /** @deprecated */
       hours: '60 min',
-      features: ['Public Projects', 'Basic Model (Limited capabilities)'],
+      features: [
+        '$5/month usage',
+        'Public Projects',
+        'Basic Model (Limited capabilities)',
+      ],
       stripePriceId: config.SUBSCRIPTION_TIERS.FREE.priceId,
       upgradePlans: [],
     },
     {
-      name: 'Pro',
+      name: 'Plus',
       price: '$20',
+      yearlyPrice: '$204',
+      originalYearlyPrice: '$240',
+      discountPercentage: 15,
       description: 'Everything in Free, plus:',
-      buttonText: 'Try Free',
+      buttonText: 'Start Free',
       buttonColor: 'bg-primary text-white dark:text-black',
       isPopular: true,
+      /** @deprecated */
       hours: '2 hours',
       features: [
-        '2 hours',
+        '$20/month usage',
         'Private projects',
         'Access to intelligent Model (Full Suna)',
       ],
       stripePriceId: config.SUBSCRIPTION_TIERS.TIER_2_20.priceId,
+      yearlyStripePriceId: config.SUBSCRIPTION_TIERS.TIER_2_20_YEARLY.priceId,
       upgradePlans: [],
     },
     {
-      name: 'Custom',
+      name: 'Pro',
       price: '$50',
-      description: 'Everything in Pro, plus:',
-      buttonText: 'Try Free',
+      yearlyPrice: '$510',
+      originalYearlyPrice: '$600',
+      discountPercentage: 15,
+      description: 'Everything in Free, plus:',
+      buttonText: 'Start Free',
       buttonColor: 'bg-secondary text-white',
       isPopular: false,
+      /** @deprecated */
       hours: '6 hours',
-      features: ['Suited to you needs'],
-      upgradePlans: [
-        {
-          hours: '6 hours',
-          price: '$50',
-          stripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50.priceId,
-        },
-        {
-          hours: '12 hours',
-          price: '$100',
-          stripePriceId: config.SUBSCRIPTION_TIERS.TIER_12_100.priceId,
-        },
-        {
-          hours: '25 hours',
-          price: '$200',
-          stripePriceId: config.SUBSCRIPTION_TIERS.TIER_25_200.priceId,
-        },
-        {
-          hours: '50 hours',
-          price: '$400',
-          stripePriceId: config.SUBSCRIPTION_TIERS.TIER_50_400.priceId,
-        },
-        {
-          hours: '125 hours',
-          price: '$800',
-          stripePriceId: config.SUBSCRIPTION_TIERS.TIER_125_800.priceId,
-        },
-        {
-          hours: '200 hours',
-          price: '$1000',
-          stripePriceId: config.SUBSCRIPTION_TIERS.TIER_200_1000.priceId,
-        },
+      features: [
+        '$50/month usage',
+        'Private projects',
+        'Access to intelligent Model (Full Suna)',
       ],
       stripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50.priceId,
+      yearlyStripePriceId: config.SUBSCRIPTION_TIERS.TIER_6_50_YEARLY.priceId,
+      upgradePlans: [],
+    },
+    {
+      name: 'Business',
+      price: '$100',
+      yearlyPrice: '$1020',
+      originalYearlyPrice: '$1200',
+      discountPercentage: 15,
+      description: 'Everything in Pro, plus:',
+      buttonText: 'Start Free',
+      buttonColor: 'bg-secondary text-white',
+      isPopular: false,
+      hours: '12 hours',
+      features: [
+        '$100/month usage',
+        'Private projects',
+        'Access to intelligent Model (Full Suna)',
+        'Priority support',
+      ],
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_12_100.priceId,
+      yearlyStripePriceId: config.SUBSCRIPTION_TIERS.TIER_12_100_YEARLY.priceId,
+      upgradePlans: [],
+      hidden: true,
+    },
+    {
+      name: 'Ultra',
+      price: '$200',
+      yearlyPrice: '$2040',
+      originalYearlyPrice: '$2400',
+      discountPercentage: 15,
+      description: 'Everything in Free, plus:',
+      buttonText: 'Start Free',
+      buttonColor: 'bg-primary text-white dark:text-black',
+      isPopular: false,
+      hours: '25 hours',
+      features: [
+        '$200/month usage',
+        'Private projects',
+        'Access to intelligent Model (Full Suna)',
+      ],
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_25_200.priceId,
+      yearlyStripePriceId: config.SUBSCRIPTION_TIERS.TIER_25_200_YEARLY.priceId,
+      upgradePlans: [],
+    },
+    {
+      name: 'Enterprise',
+      price: '$400',
+      yearlyPrice: '$4080',
+      originalYearlyPrice: '$4800',
+      discountPercentage: 15,
+      description: 'Everything in Ultra, plus:',
+      buttonText: 'Start Free',
+      buttonColor: 'bg-secondary text-white',
+      isPopular: false,
+      hours: '50 hours',
+      features: [
+        '$400/month usage',
+        'Private projects',
+        'Access to intelligent Model (Full Suna)',
+        'Priority support',
+        'Custom integrations',
+      ],
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_50_400.priceId,
+      yearlyStripePriceId: config.SUBSCRIPTION_TIERS.TIER_50_400_YEARLY.priceId,
+      upgradePlans: [],
+      hidden: true,
+    },
+    {
+      name: 'Scale',
+      price: '$800',
+      yearlyPrice: '$8160',
+      originalYearlyPrice: '$9600',
+      discountPercentage: 15,
+      description: 'Everything in Enterprise, plus:',
+      buttonText: 'Start Free',
+      buttonColor: 'bg-secondary text-white',
+      isPopular: false,
+      hours: '125 hours',
+      features: [
+        '$800/month usage',
+        'Private projects',
+        'Access to intelligent Model (Full Suna)',
+        'Priority support',
+        'Custom integrations',
+        'Dedicated account manager',
+      ],
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_125_800.priceId,
+      yearlyStripePriceId: config.SUBSCRIPTION_TIERS.TIER_125_800_YEARLY.priceId,
+      upgradePlans: [],
+      hidden: true,
+    },
+    {
+      name: 'Premium',
+      price: '$1000',
+      yearlyPrice: '$10200',
+      originalYearlyPrice: '$12000',
+      discountPercentage: 15,
+      description: 'Everything in Scale, plus:',
+      buttonText: 'Start Free',
+      buttonColor: 'bg-secondary text-white',
+      isPopular: false,
+      hours: '200 hours',
+      features: [
+        '$1000/month usage',
+        'Private projects',
+        'Access to intelligent Model (Full Suna)',
+        'Priority support',
+        'Custom integrations',
+        'Dedicated account manager',
+        'Custom SLA',
+      ],
+      stripePriceId: config.SUBSCRIPTION_TIERS.TIER_200_1000.priceId,
+      yearlyStripePriceId: config.SUBSCRIPTION_TIERS.TIER_200_1000_YEARLY.priceId,
+      upgradePlans: [],
+      hidden: true,
     },
   ],
   companyShowcase: {
@@ -1359,7 +1469,7 @@ export const siteConfig = {
       ),
       image:
         'https://images.unsplash.com/photo-1532153975070-2e9ab71f1b14?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
-      url: 'https://suna.so/share/bf6a819b-6af5-4ef7-b861-16e5261ceeb0',
+      url: 'https://suna.so/share/2a147a3a-3778-4624-8285-42474c8c1c9c',
     },
     {
       id: 'speaker-prospecting',
@@ -1485,7 +1595,7 @@ export const siteConfig = {
       ),
       image:
         'https://images.unsplash.com/photo-1552581234-26160f608093?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
-      url: 'https://suna.so/share/a01744fc-6b33-434c-9d4e-67d7e820297c',
+      url: 'https://suna.so/share/c3472df7-adc1-4d5f-9927-4f8f513ec2fe',
     },
     {
       id: 'seo-analysis',
@@ -1534,7 +1644,7 @@ export const siteConfig = {
       ),
       image:
         'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=2400&q=80',
-      url: 'https://suna.so/share/59be8603-3225-4c15-a948-ab976e5912f6',
+      url: 'https://suna.so/share/cf756e02-fee9-4281-a0e4-76ac850f1ac9',
     },
     {
       id: 'personal-trip',

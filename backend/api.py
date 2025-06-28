@@ -1,6 +1,7 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException, Response, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+import sentry # Keep this import here, right after fastapi imports
 from contextlib import asynccontextmanager
 from agentpress.thread_manager import ThreadManager
 from services.supabase import DBConnection
@@ -8,18 +9,28 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from utils.config import config, EnvMode
 import asyncio
-from utils.logger import logger
-import uuid
+from utils.logger import logger, structlog
 import time
 from collections import OrderedDict
+from typing import Dict, Any
 
+from pydantic import BaseModel
+import uuid
 # Import the agent API module
 from agent import api as agent_api
 from sandbox import api as sandbox_api
 from services import billing as billing_api
+from flags import api as feature_flags_api
+from services import transcription as transcription_api
+from services.mcp_custom import discover_custom_tools
+import sys
+from services import email_api
 
-# Load environment variables (these will be available through config)
+
 load_dotenv()
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 # Initialize managers
 db = DBConnection()
@@ -31,20 +42,15 @@ MAX_CONCURRENT_IPS = 25
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
     logger.info(f"Starting up FastAPI application with instance ID: {instance_id} in {config.ENV_MODE.value} mode")
-    
     try:
-        # Initialize database
         await db.initialize()
         
-        # Initialize the agent API with shared resources
         agent_api.initialize(
             db,
             instance_id
         )
         
-        # Initialize the sandbox API with shared resources
         sandbox_api.initialize(db)
         
         # Initialize Redis connection
@@ -84,13 +90,23 @@ app = FastAPI(lifespan=lifespan)
 
 @app.middleware("http")
 async def log_requests_middleware(request: Request, call_next):
+    structlog.contextvars.clear_contextvars()
+
+    request_id = str(uuid.uuid4())
     start_time = time.time()
     client_ip = request.client.host
     method = request.method
-    url = str(request.url)
     path = request.url.path
     query_params = str(request.query_params)
-    
+
+    structlog.contextvars.bind_contextvars(
+        request_id=request_id,
+        client_ip=client_ip,
+        method=method,
+        path=path,
+        query_params=query_params
+    )
+
     # Log the incoming request
     logger.info(f"Request started: {method} {path} from {client_ip} | Query: {query_params}")
     
@@ -119,17 +135,39 @@ app.add_middleware(
     allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-Project-Id"],
 )
 
-# Include the agent router with a prefix
 app.include_router(agent_api.router, prefix="/api")
 
-# Include the sandbox router with a prefix
 app.include_router(sandbox_api.router, prefix="/api")
 
-# Include the billing router with a prefix
 app.include_router(billing_api.router, prefix="/api")
+
+app.include_router(feature_flags_api.router, prefix="/api")
+
+from mcp_local import api as mcp_api
+from mcp_local import secure_api as secure_mcp_api
+
+app.include_router(mcp_api.router, prefix="/api")
+app.include_router(secure_mcp_api.router, prefix="/api/secure-mcp")
+
+app.include_router(transcription_api.router, prefix="/api")
+app.include_router(email_api.router, prefix="/api")
+
+from workflows import api as workflows_api
+workflows_api.initialize(db)
+app.include_router(workflows_api.router, prefix="/api")
+
+from webhooks import api as webhooks_api
+webhooks_api.initialize(db)
+app.include_router(webhooks_api.router, prefix="/api")
+
+from scheduling import api as scheduling_api
+app.include_router(scheduling_api.router)
+
+from knowledge_base import api as knowledge_base_api
+app.include_router(knowledge_base_api.router, prefix="/api")
 
 @app.get("/api/health")
 async def health_check():
@@ -141,10 +179,28 @@ async def health_check():
         "instance_id": instance_id
     }
 
+class CustomMCPDiscoverRequest(BaseModel):
+    type: str
+    config: Dict[str, Any]
+
+
+@app.post("/api/mcp/discover-custom-tools")
+async def discover_custom_mcp_tools(request: CustomMCPDiscoverRequest):
+    try:
+        return await discover_custom_tools(request.type, request.config)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error discovering custom MCP tools: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
     
-    workers = 2
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    
+    workers = 4
     
     logger.info(f"Starting server on 0.0.0.0:8000 with {workers} workers")
     uvicorn.run(
@@ -152,5 +208,5 @@ if __name__ == "__main__":
         host="0.0.0.0", 
         port=8000,
         workers=workers,
-        # reload=True
+        loop="asyncio"
     )
