@@ -1,21 +1,26 @@
-import React, { forwardRef, useEffect } from 'react';
+import React, { forwardRef, useEffect, useState } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Square, Loader2, ArrowUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { UploadedFile } from './chat-input';
 import { FileUploadHandler } from './file-upload-handler';
+import { VoiceRecorder } from './voice-recorder';
 import { ModelSelector } from './model-selector';
+import { ChatSettingsDropdown } from './chat-settings-dropdown';
 import { SubscriptionStatus } from './_use-model-selection';
 import { isLocalMode } from '@/lib/config';
+import { useFeatureFlag } from '@/lib/feature-flags';
 import { TooltipContent } from '@/components/ui/tooltip';
 import { Tooltip } from '@/components/ui/tooltip';
 import { TooltipProvider, TooltipTrigger } from '@radix-ui/react-tooltip';
+import { BillingModal } from '@/components/billing/billing-modal';
 
 interface MessageInputProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
+  onTranscription: (text: string) => void;
   placeholder: string;
   loading: boolean;
   disabled: boolean;
@@ -31,6 +36,7 @@ interface MessageInputProps {
   setUploadedFiles: React.Dispatch<React.SetStateAction<UploadedFile[]>>;
   setIsUploading: React.Dispatch<React.SetStateAction<boolean>>;
   hideAttachments?: boolean;
+  messages?: any[]; // Add messages prop
 
   selectedModel: string;
   onModelChange: (model: string) => void;
@@ -38,6 +44,8 @@ interface MessageInputProps {
   subscriptionStatus: SubscriptionStatus;
   canAccessModel: (modelId: string) => boolean;
   refreshCustomModels?: () => void;
+  selectedAgentId?: string;
+  onAgentSelect?: (agentId: string | undefined) => void;
 }
 
 export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
@@ -46,6 +54,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       value,
       onChange,
       onSubmit,
+      onTranscription,
       placeholder,
       loading,
       disabled,
@@ -61,6 +70,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       setUploadedFiles,
       setIsUploading,
       hideAttachments = false,
+      messages = [],
 
       selectedModel,
       onModelChange,
@@ -68,9 +78,15 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       subscriptionStatus,
       canAccessModel,
       refreshCustomModels,
+
+      selectedAgentId,
+      onAgentSelect,
     },
     ref,
   ) => {
+    const [billingModalOpen, setBillingModalOpen] = useState(false);
+    const { enabled: customAgentsEnabled, loading: flagsLoading } = useFeatureFlag('custom_agents');
+
     useEffect(() => {
       const textarea = ref as React.RefObject<HTMLTextAreaElement>;
       if (!textarea.current) return;
@@ -94,7 +110,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
     }, [value, ref]);
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
         e.preventDefault();
         if (
           (value.trim() || uploadedFiles.length > 0) &&
@@ -107,8 +123,9 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
     };
 
     return (
-      <div className="flex flex-col w-full h-auto gap-4 justify-between">
-        <div className="flex gap-2 items-center px-2">
+      <div className="relative flex flex-col w-full h-auto gap-4 justify-between">
+
+        <div className="flex flex-col gap-2 items-center px-2">
           <Textarea
             ref={ref}
             value={value}
@@ -124,6 +141,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
           />
         </div>
 
+
         <div className="flex items-center justify-between mt-1 ml-3 mb-1 pr-2">
           <div className="flex items-center gap-3">
             {!hideAttachments && (
@@ -137,37 +155,64 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                 setPendingFiles={setPendingFiles}
                 setUploadedFiles={setUploadedFiles}
                 setIsUploading={setIsUploading}
+                messages={messages}
               />
             )}
 
-
           </div>
+          
           {subscriptionStatus === 'no_subscription' && !isLocalMode() &&
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger>
-                  <p className='text-sm text-amber-500 hidden sm:block'>Upgrade for full performance</p>
-                  <div className='sm:hidden absolute bottom-0 left-0 right-0 flex justify-center'>
-                    <p className='text-xs text-amber-500 bg-background/80 backdrop-blur-sm px-2 py-1 rounded-md shadow-sm'>
-                      Upgrade for better performance
-                    </p>
-                  </div>
+                  <p role='button' className='text-sm text-amber-500 hidden sm:block cursor-pointer' onClick={() => setBillingModalOpen(true)}>Upgrade for more usage</p>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>The free tier is severely limited by inferior models; upgrade to experience the true full Suna experience.</p>
+                  <p>The free tier is severely limited by the amount of usage. Upgrade to experience the full power of Suna.</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           }
+          
           <div className='flex items-center gap-2'>
-            <ModelSelector
-              selectedModel={selectedModel}
-              onModelChange={onModelChange}
-              modelOptions={modelOptions}
-              subscriptionStatus={subscriptionStatus}
-              canAccessModel={canAccessModel}
-              refreshCustomModels={refreshCustomModels}
+            {/* Show model selector inline if custom agents are disabled, otherwise show settings dropdown */}
+            {!customAgentsEnabled || flagsLoading ? (
+              <ModelSelector
+                selectedModel={selectedModel}
+                onModelChange={onModelChange}
+                modelOptions={modelOptions}
+                subscriptionStatus={subscriptionStatus}
+                canAccessModel={canAccessModel}
+                refreshCustomModels={refreshCustomModels}
+                billingModalOpen={billingModalOpen}
+                setBillingModalOpen={setBillingModalOpen}
+              />
+            ) : (
+              <ChatSettingsDropdown
+                selectedAgentId={selectedAgentId}
+                onAgentSelect={onAgentSelect}
+                selectedModel={selectedModel}
+                onModelChange={onModelChange}
+                modelOptions={modelOptions}
+                subscriptionStatus={subscriptionStatus}
+                canAccessModel={canAccessModel}
+                refreshCustomModels={refreshCustomModels}
+                disabled={loading || (disabled && !isAgentRunning)}
+              />
+            )}
+            
+            {/* Billing Modal */}
+            <BillingModal
+              open={billingModalOpen}
+              onOpenChange={setBillingModalOpen}
+              returnUrl={typeof window !== 'undefined' ? window.location.href : '/'}
             />
+
+            <VoiceRecorder
+              onTranscription={onTranscription}
+              disabled={loading || (disabled && !isAgentRunning)}
+            />
+            
             <Button
               type="submit"
               onClick={isAgentRunning && onStopAgent ? onStopAgent : onSubmit}
@@ -197,6 +242,13 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
             </Button>
           </div>
         </div>
+        {subscriptionStatus === 'no_subscription' && !isLocalMode() &&
+          <div className='sm:hidden absolute -bottom-8 left-0 right-0 flex justify-center'>
+            <p className='text-xs text-amber-500 px-2 py-1'>
+              Upgrade for better performance
+            </p>
+          </div>
+        }
       </div>
     );
   },

@@ -14,6 +14,10 @@ import { handleFiles } from './file-upload-handler';
 import { MessageInput } from './message-input';
 import { AttachmentGroup } from '../attachment-group';
 import { useModelSelection } from './_use-model-selection';
+import { AgentSelector } from './agent-selector';
+import { useFileDelete } from '@/hooks/react-query/files';
+import { useQueryClient } from '@tanstack/react-query';
+import { FloatingToolPreview, ToolCallInput } from './floating-tool-preview';
 
 export interface ChatInputHandles {
   getPendingFiles: () => File[];
@@ -36,6 +40,15 @@ export interface ChatInputProps {
   onFileBrowse?: () => void;
   sandboxId?: string;
   hideAttachments?: boolean;
+  selectedAgentId?: string;
+  onAgentSelect?: (agentId: string | undefined) => void;
+  agentName?: string;
+  messages?: any[];
+  bgColor?: string;
+  toolCalls?: ToolCallInput[];
+  toolCallIndex?: number;
+  showToolPreview?: boolean;
+  onExpandToolPreview?: () => void;
 }
 
 export interface UploadedFile {
@@ -61,6 +74,15 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       onFileBrowse,
       sandboxId,
       hideAttachments = false,
+      selectedAgentId,
+      onAgentSelect,
+      agentName,
+      messages = [],
+      bgColor = 'bg-sidebar',
+      toolCalls = [],
+      toolCallIndex = 0,
+      showToolPreview = false,
+      onExpandToolPreview,
     },
     ref,
   ) => {
@@ -84,6 +106,9 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       getActualModelId,
       refreshCustomModels,
     } = useModelSelection();
+
+    const deleteFileMutation = useFileDelete();
+    const queryClient = useQueryClient();
 
     const textareaRef = useRef<HTMLTextAreaElement | null>(null);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -150,15 +175,49 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
       }
     };
 
+    const handleTranscription = (transcribedText: string) => {
+      const currentValue = isControlled ? controlledValue : uncontrolledValue;
+      const newValue = currentValue ? `${currentValue} ${transcribedText}` : transcribedText;
+
+      if (isControlled) {
+        controlledOnChange(newValue);
+      } else {
+        setUncontrolledValue(newValue);
+      }
+    };
+
     const removeUploadedFile = (index: number) => {
       const fileToRemove = uploadedFiles[index];
+
+      // Clean up local URL if it exists
       if (fileToRemove.localUrl) {
         URL.revokeObjectURL(fileToRemove.localUrl);
       }
 
+      // Remove from local state immediately for responsive UI
       setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
       if (!sandboxId && pendingFiles.length > index) {
         setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+      }
+
+      // Check if file is referenced in existing chat messages before deleting from server
+      const isFileUsedInChat = messages.some(message => {
+        const content = typeof message.content === 'string' ? message.content : '';
+        return content.includes(`[Uploaded File: ${fileToRemove.path}]`);
+      });
+
+      // Only delete from server if file is not referenced in chat history
+      if (sandboxId && fileToRemove.path && !isFileUsedInChat) {
+        deleteFileMutation.mutate({
+          sandboxId,
+          filePath: fileToRemove.path,
+        }, {
+          onError: (error) => {
+            console.error('Failed to delete file from server:', error);
+          }
+        });
+      } else if (isFileUsedInChat) {
+        console.log(`Skipping server deletion for ${fileToRemove.path} - file is referenced in chat history`);
       }
     };
 
@@ -175,16 +234,22 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
     };
 
     return (
-      <div className="mx-auto w-full max-w-4xl px-4">
+      <div className="mx-auto w-full max-w-4xl">
+        <FloatingToolPreview
+          toolCalls={toolCalls}
+          currentIndex={toolCallIndex}
+          onExpand={onExpandToolPreview || (() => {})}
+          agentName={agentName}
+          isVisible={showToolPreview}
+        />
         <Card
-          className="shadow-none w-full max-w-4xl mx-auto bg-transparent border-none rounded-xl overflow-hidden"
+          className="-mb-2 bg-red-400 shadow-none w-full max-w-4xl mx-auto bg-transparent border-none rounded-xl overflow-hidden"
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={(e) => {
             e.preventDefault();
             e.stopPropagation();
             setIsDraggingOver(false);
-
             if (fileInputRef.current && e.dataTransfer.files.length > 0) {
               const files = Array.from(e.dataTransfer.files);
               handleFiles(
@@ -193,12 +258,14 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
                 setPendingFiles,
                 setUploadedFiles,
                 setIsUploading,
+                messages,
+                queryClient,
               );
             }
           }}
         >
           <div className="w-full text-sm flex flex-col justify-between items-start rounded-lg">
-            <CardContent className="w-full p-1.5 pb-2 bg-sidebar rounded-2xl border">
+            <CardContent className={`w-full p-1.5 pb-2 ${bgColor} rounded-2xl border`}>
               <AttachmentGroup
                 files={uploadedFiles || []}
                 sandboxId={sandboxId}
@@ -207,12 +274,12 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
                 maxHeight="216px"
                 showPreviews={true}
               />
-
               <MessageInput
                 ref={textareaRef}
                 value={value}
                 onChange={handleChange}
                 onSubmit={handleSubmit}
+                onTranscription={handleTranscription}
                 placeholder={placeholder}
                 loading={loading}
                 disabled={disabled}
@@ -228,6 +295,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
                 setUploadedFiles={setUploadedFiles}
                 setIsUploading={setIsUploading}
                 hideAttachments={hideAttachments}
+                messages={messages}
 
                 selectedModel={selectedModel}
                 onModelChange={handleModelChange}
@@ -235,6 +303,9 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
                 subscriptionStatus={subscriptionStatus}
                 canAccessModel={canAccessModel}
                 refreshCustomModels={refreshCustomModels}
+
+                selectedAgentId={selectedAgentId}
+                onAgentSelect={onAgentSelect}
               />
             </CardContent>
           </div>
@@ -248,7 +319,7 @@ export const ChatInput = forwardRef<ChatInputHandles, ChatInputProps>(
           >
             <div className="text-xs text-muted-foreground flex items-center gap-2">
               <Loader2 className="h-3 w-3 animate-spin" />
-              <span>Kortix Suna is working...</span>
+              <span>{agentName ? `${agentName} is working...` : 'Suna is working...'}</span>
             </div>
           </motion.div>
         )}
