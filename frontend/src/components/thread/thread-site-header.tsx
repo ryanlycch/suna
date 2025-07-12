@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from "@/components/ui/button"
-import { FolderOpen, Link, PanelRightOpen, Check, X, Menu, Share2 } from "lucide-react"
+import { FolderOpen, Link, PanelRightOpen, Check, X, Menu, Share2, Book } from "lucide-react"
 import { usePathname } from "next/navigation"
 import { toast } from "sonner"
 import {
@@ -12,12 +12,23 @@ import {
 } from "@/components/ui/tooltip"
 import { useState, useRef, KeyboardEvent } from "react"
 import { Input } from "@/components/ui/input"
-import { updateProject } from "@/lib/api"
+import { useUpdateProject } from "@/hooks/react-query"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
 import { useSidebar } from "@/components/ui/sidebar"
 import { ShareModal } from "@/components/sidebar/share-modal"
+import { useQueryClient } from "@tanstack/react-query";
+import { projectKeys } from "@/hooks/react-query/sidebar/keys";
+import { threadKeys } from "@/hooks/react-query/threads/keys";
+import { KnowledgeBaseManager } from "@/components/thread/knowledge-base/knowledge-base-manager";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useFeatureFlags } from "@/lib/feature-flags";
 
 interface ThreadSiteHeaderProps {
   threadId: string;
@@ -44,13 +55,22 @@ export function SiteHeader({
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(projectName)
   const inputRef = useRef<HTMLInputElement>(null)
-  const [showShareModal, setShowShareModal] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showKnowledgeBase, setShowKnowledgeBase] = useState(false);
+  const queryClient = useQueryClient();
+  const { flags, loading: flagsLoading } = useFeatureFlags(['knowledge_base']);
+  const knowledgeBaseEnabled = flags.knowledge_base;
 
   const isMobile = useIsMobile() || isMobileView
   const { setOpenMobile } = useSidebar()
+  const updateProjectMutation = useUpdateProject()
 
   const openShareModal = () => {
     setShowShareModal(true)
+  }
+
+  const openKnowledgeBase = () => {
+    setShowKnowledgeBase(true)
   }
 
   const startEditing = () => {
@@ -83,10 +103,13 @@ export function SiteHeader({
           return;
         }
 
-        const updatedProject = await updateProject(projectId, { name: editName })
+        const updatedProject = await updateProjectMutation.mutateAsync({
+          projectId,
+          data: { name: editName }
+        })
         if (updatedProject) {
           onProjectRenamed?.(editName);
-          toast.success('Project renamed successfully');
+          queryClient.invalidateQueries({ queryKey: threadKeys.project(projectId) });
         } else {
           throw new Error('Failed to update project');
         }
@@ -208,6 +231,23 @@ export function SiteHeader({
                 </TooltipContent>
               </Tooltip>
 
+              {knowledgeBaseEnabled && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={openKnowledgeBase}
+                      className="h-9 w-9 cursor-pointer"
+                    >
+                      <Book className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Knowledge Base</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -224,7 +264,7 @@ export function SiteHeader({
                 </TooltipContent>
               </Tooltip>
 
-              <Tooltip>
+              {/* <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
@@ -238,7 +278,7 @@ export function SiteHeader({
                 <TooltipContent>
                   <p>Toggle Computer Preview (CMD+I)</p>
                 </TooltipContent>
-              </Tooltip>
+              </Tooltip> */}
             </TooltipProvider>
           )}
         </div>
@@ -249,6 +289,22 @@ export function SiteHeader({
         threadId={threadId}
         projectId={projectId}
       />
+      
+      <Dialog open={showKnowledgeBase} onOpenChange={setShowKnowledgeBase}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden p-0">
+          <div className="flex flex-col h-full">
+            <DialogHeader className="px-6 py-4">
+              <DialogTitle className="flex items-center gap-2 text-lg">
+                <Book className="h-5 w-5" />
+                Knowledge Base
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto p-6">
+              <KnowledgeBaseManager threadId={threadId} />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 } 
