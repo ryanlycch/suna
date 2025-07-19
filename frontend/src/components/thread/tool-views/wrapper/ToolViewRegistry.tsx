@@ -2,16 +2,21 @@ import React, { useMemo } from 'react';
 import { ToolViewProps } from '../types';
 import { GenericToolView } from '../GenericToolView';
 import { BrowserToolView } from '../BrowserToolView';
-import { CommandToolView } from '../CommandToolView';
-import { DataProviderToolView } from '../DataProviderToolView';
-import { ExposePortToolView } from '../ExposePortToolView';
-import { FileOperationToolView } from '../FileOperationToolView';
-import { StrReplaceToolView } from '../StrReplaceToolView';
+import { CommandToolView } from '../command-tool/CommandToolView';
+import { ExposePortToolView } from '../expose-port-tool/ExposePortToolView';
+import { FileOperationToolView } from '../file-operation/FileOperationToolView';
+import { StrReplaceToolView } from '../str-replace/StrReplaceToolView';
 import { WebCrawlToolView } from '../WebCrawlToolView';
-import { WebScrapeToolView } from '../WebScrapeToolView';
-import { WebSearchToolView } from '../WebSearchToolView';
-import { SeeImageToolView } from '../SeeImageToolView';
-import { TerminateCommandToolView } from '../TerminateCommandToolView';
+import { WebScrapeToolView } from '../web-scrape-tool/WebScrapeToolView';
+import { WebSearchToolView } from '../web-search-tool/WebSearchToolView';
+import { SeeImageToolView } from '../see-image-tool/SeeImageToolView';
+import { TerminateCommandToolView } from '../command-tool/TerminateCommandToolView';
+import { AskToolView } from '../ask-tool/AskToolView';
+import { CompleteToolView } from '../CompleteToolView';
+import { ExecuteDataProviderCallToolView } from '../data-provider-tool/ExecuteDataProviderCallToolView';
+import { DataProviderEndpointsToolView } from '../data-provider-tool/DataProviderEndpointsToolView';
+import { DeployToolView } from '../DeployToolView';
+
 
 export type ToolViewComponent = React.ComponentType<ToolViewProps>;
 
@@ -35,7 +40,9 @@ const defaultRegistry: ToolViewRegistryType = {
   'browser-click-coordinates': BrowserToolView,
 
   'execute-command': CommandToolView,
+  'check-command-output': GenericToolView,
   'terminate-command': TerminateCommandToolView,
+  'list-commands': GenericToolView,
 
   'create-file': FileOperationToolView,
   'delete-file': FileOperationToolView,
@@ -48,13 +55,19 @@ const defaultRegistry: ToolViewRegistryType = {
   'crawl-webpage': WebCrawlToolView,
   'scrape-webpage': WebScrapeToolView,
 
-  'execute-data-provider-call': DataProviderToolView,
-  'get-data-provider-endpoints': DataProviderToolView,
-  'get_data_provider_endpoints': DataProviderToolView,
+  'execute-data-provider-call': ExecuteDataProviderCallToolView,
+  'get-data-provider-endpoints': DataProviderEndpointsToolView,
 
   'expose-port': ExposePortToolView,
 
   'see-image': SeeImageToolView,
+
+  'call-mcp-tool': GenericToolView,
+
+  'ask': AskToolView,
+  'complete': CompleteToolView,
+
+  'deploy': DeployToolView,
 
   'default': GenericToolView,
 };
@@ -63,7 +76,14 @@ class ToolViewRegistry {
   private registry: ToolViewRegistryType;
 
   constructor(initialRegistry: Partial<ToolViewRegistryType> = {}) {
-    this.registry = { ...defaultRegistry, ...initialRegistry };
+    this.registry = { ...defaultRegistry };
+    
+    // Only add non-undefined values from initialRegistry
+    Object.entries(initialRegistry).forEach(([key, value]) => {
+      if (value !== undefined) {
+        this.registry[key] = value;
+      }
+    });
   }
 
   register(toolName: string, component: ToolViewComponent): void {

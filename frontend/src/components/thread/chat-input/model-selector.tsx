@@ -14,7 +14,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
-import { Check, ChevronDown, Search, AlertTriangle, Crown, ArrowUpRight, Brain, Plus, Edit, Trash } from 'lucide-react';
+import { Check, ChevronDown, Search, AlertTriangle, Crown, ArrowUpRight, Brain, Plus, Edit, Trash, Cpu } from 'lucide-react';
 import {
   ModelOption,
   SubscriptionStatus,
@@ -27,6 +27,7 @@ import {
   MODELS // Import the centralized MODELS constant
 } from './_use-model-selection';
 import { PaywallDialog } from '@/components/payment/paywall-dialog';
+import { BillingModal } from '@/components/billing/billing-modal';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { isLocalMode } from '@/lib/config';
@@ -45,6 +46,9 @@ interface ModelSelectorProps {
   canAccessModel: (modelId: string) => boolean;
   subscriptionStatus: SubscriptionStatus;
   refreshCustomModels?: () => void;
+  billingModalOpen: boolean;
+  setBillingModalOpen: (open: boolean) => void;
+  hasBorder?: boolean;
 }
 
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
@@ -54,6 +58,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   canAccessModel,
   subscriptionStatus,
   refreshCustomModels,
+  billingModalOpen,
+  setBillingModalOpen,
+  hasBorder = false,
 }) => {
   const [paywallOpen, setPaywallOpen] = useState(false);
   const [lockedModel, setLockedModel] = useState<string | null>(null);
@@ -83,9 +90,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       localStorage.setItem(STORAGE_KEY_CUSTOM_MODELS, JSON.stringify(customModels));
     }
   }, [customModels]);
-
-  // Get current custom models from state
-  const currentCustomModels = customModels || [];
 
   // Enhance model options with capabilities - using a Map to ensure uniqueness
   const modelMap = new Map();
@@ -195,7 +199,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   };
 
   const handleUpgradeClick = () => {
-    router.push('/settings/billing');
+    setBillingModalOpen(true);
   };
 
   const closeDialog = () => {
@@ -504,30 +508,29 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   return (
     <div className="relative">
       <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="default"
-            className="h-8 rounded-lg text-muted-foreground shadow-none border-none focus:ring-0 px-3"
-          >
-            <div className="flex items-center gap-1 text-sm font-medium">
-              {MODELS[selectedModel]?.lowQuality && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mr-1" />
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom" className="text-xs">
-                      <p>Basic model with limited capabilities</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              <span className="truncate max-w-[100px] sm:max-w-[160px] md:max-w-[200px] lg:max-w-none">{selectedLabel}</span>
-              <ChevronDown className="h-3 w-3 opacity-50 ml-1 flex-shrink-0" />
-            </div>
-          </Button>
-        </DropdownMenuTrigger>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 py-2 bg-transparent border-0 rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent/50 flex items-center gap-2"
+                >
+                  <div className="relative flex items-center justify-center">
+                    <Cpu className="h-4 w-4" />
+                    {MODELS[selectedModel]?.lowQuality && (
+                      <AlertTriangle className="h-2.5 w-2.5 text-amber-500 absolute -top-1 -right-1" />
+                    )}
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              <p>Choose a model</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <DropdownMenuContent
           align="end"
@@ -698,28 +701,6 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     m.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
                     m.id.toLowerCase().includes(searchQuery.toLowerCase())
                   )
-                  // Sort to prioritize recommended paid models first
-                  .sort((a, b) => {
-                    const aRecommendedPaid = MODELS[a.id]?.recommended && a.requiresSubscription;
-                    const bRecommendedPaid = MODELS[b.id]?.recommended && b.requiresSubscription;
-
-                    if (aRecommendedPaid && !bRecommendedPaid) return -1;
-                    if (!aRecommendedPaid && bRecommendedPaid) return 1;
-
-                    // Secondary sorting: recommended free models next
-                    const aRecommended = MODELS[a.id]?.recommended;
-                    const bRecommended = MODELS[b.id]?.recommended;
-
-                    if (aRecommended && !bRecommended) return -1;
-                    if (!aRecommended && bRecommended) return 1;
-
-                    // Paid models next
-                    if (a.requiresSubscription && !b.requiresSubscription) return -1;
-                    if (!a.requiresSubscription && b.requiresSubscription) return 1;
-
-                    // Default to alphabetical order
-                    return a.label.localeCompare(b.label);
-                  })
                   .map((model, index) => renderModelOption(model, index))}
 
                 {uniqueModels.length === 0 && (
